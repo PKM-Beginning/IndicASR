@@ -2,23 +2,19 @@
 data_loader.py — IndicASR
 
 Loads evaluation/training subsets from the datasets documented in
-DATASETS.md (Kathbath, FLEURS, Common Voice) and returns them in a common
-format: a list of dicts with keys {audio_path_or_array, sampling_rate,
-transcript, language, dataset_name, sample_id}.
+DATASETS.md (Kathbath and FLEURS) and returns them in a common
+format containing audio data, sampling rate, transcript, language,
+dataset name, and sample ID.
 
-This module does the actual network calls (via the `datasets` library) — it
-has NOT been run in this environment (no network access here), so treat it
-as ready-to-run code for your Colab/Kaggle session, not as something whose
-output has already been verified. Run `python src/data_loader.py --smoke_test`
-first on a tiny sample to confirm access/auth works before scaling up.
+This module performs network calls through the `datasets` library.
+Run `python src/data_loader.py --smoke_test` first on a tiny sample
+to confirm dataset access and audio decoding before scaling up.
 
-Concept notes (since you're new to some of this):
+Concept notes:
 - "streaming=True" in HF `datasets` lets you pull examples one at a time
-  instead of downloading the whole dataset up front — important for Kathbath,
-  which is large in total even though we only want a few thousand clips.
-- Kathbath and Common Voice are "gated": you must accept the dataset's terms
-  on the Hugging Face website once, then run `huggingface-cli login` locally
-  so your script is authenticated.
+  instead of downloading the whole dataset up front.
+- Kathbath is gated: accept the dataset terms on Hugging Face and
+  authenticate your Hugging Face account before running the loader.
 """
 
 import argparse
