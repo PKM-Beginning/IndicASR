@@ -36,7 +36,8 @@ class Sample:
     dataset_name: str
     language: str
     transcript: str
-    audio_path: str = None      # local path once cached, if applicable
+    audio_array: object = None
+    audio_path: str = None
     sampling_rate: int = 16000
 
 
