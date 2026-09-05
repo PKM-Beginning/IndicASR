@@ -96,16 +96,16 @@ def _iter_fleurs(language: str, lang_config: str, split: str, max_samples: int) 
 
         audio = row["audio"]
 
-        # Current Hugging Face datasets may expose audio through
-        # torchcodec AudioDecoder rather than the old dictionary format.
         try:
+            # Current Hugging Face datasets / torchcodec format
             audio_data = audio.get_all_samples()
-            sampling_rate = audio_data.sample_rate
             audio_array = audio_data.data
+            sampling_rate = int(audio_data.sample_rate)
+
         except AttributeError:
-            # Fallback for older dictionary-style audio objects.
+            # Compatibility with older dictionary-style audio format
             audio_array = audio["array"]
-            sampling_rate = audio.get("sampling_rate", 16000)
+            sampling_rate = int(audio.get("sampling_rate", 16000))
 
         yield Sample(
             sample_id=f"fleurs_{lang_config}_{i}",
@@ -114,7 +114,7 @@ def _iter_fleurs(language: str, lang_config: str, split: str, max_samples: int) 
             transcript=row["transcription"],
             audio_array=audio_array,
             audio_path=None,
-            sampling_rate=int(sampling_rate),
+            sampling_rate=sampling_rate,
         )
 
 
