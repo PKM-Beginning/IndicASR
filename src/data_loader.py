@@ -82,18 +82,38 @@ def _iter_fleurs(language: str, lang_config: str, split: str, max_samples: int) 
     """Streams FLEURS for one language config (e.g. 'hi_in')."""
     from datasets import load_dataset
 
-    ds = load_dataset("google/fleurs", lang_config, split=split, streaming=True)
+    ds = load_dataset(
+        "google/fleurs",
+        lang_config,
+        split=split,
+        streaming=True,
+    )
 
     for i, row in enumerate(ds):
         if i >= max_samples:
             break
+
+        audio = row["audio"]
+
+        # Current Hugging Face datasets may expose audio through
+        # torchcodec AudioDecoder rather than the old dictionary format.
+        try:
+            audio_data = audio.get_all_samples()
+            sampling_rate = audio_data.sample_rate
+            audio_array = audio_data.data
+        except AttributeError:
+            # Fallback for older dictionary-style audio objects.
+            audio_array = audio["array"]
+            sampling_rate = audio.get("sampling_rate", 16000)
+
         yield Sample(
             sample_id=f"fleurs_{lang_config}_{i}",
             dataset_name="fleurs",
             language=language,
             transcript=row["transcription"],
-            audio_path=row["audio"]["path"] if "audio" in row else None,
-            sampling_rate=row["audio"].get("sampling_rate", 16000) if "audio" in row else 16000,
+            audio_array=audio_array,
+            audio_path=None,
+            sampling_rate=int(sampling_rate),
         )
 
 
