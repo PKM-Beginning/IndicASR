@@ -16,11 +16,14 @@ data/
 To populate this directory for the first time:
 
 ```bash
-hf auth login       # once, needed for Kathbath + Common Voice (gated)
-# then accept dataset terms in a browser at:
+hf auth login       # once, needed if Kathbath requires accepting dataset terms
+# then, if prompted, accept dataset terms in a browser at:
 #   https://huggingface.co/datasets/ai4bharat/Kathbath
-#   https://huggingface.co/datasets/mozilla-foundation/common_voice_17_0
+#   https://huggingface.co/datasets/ai4bharat/Kathbath
 
 python src/data_loader.py --smoke_test          # 5 samples/lang, verifies auth + connectivity
 python src/data_loader.py --config configs/baseline.yaml   # full configured pull
 ```
+
+This project uses only Kathbath and Google FLEURS (see `../DATASETS.md`).
+FLEURS is ungated and needs no login step.

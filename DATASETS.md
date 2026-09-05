@@ -9,26 +9,48 @@ not estimated in advance.
 
 ## 1. AI4Bharat Kathbath (primary evaluation + fine-tuning source)
 
-- **Source**: https://huggingface.co/datasets/ai4bharat/Kathbath
+- **Source (current, actively maintained)**:
+  https://huggingface.co/datasets/ai4bharat/Kathbath
+  — parquet format, last updated within days at time of writing. This
+  supersedes the older lowercase `ai4bharat/kathbath` repo (tar-file
+  distribution with `test_known`/`test_unknown` splits) — that repo has not
+  been updated in ~2 years and its splits are not what the current
+  dataset card documents, so it is **not** the version this project uses.
 - **Paper**: Javed et al., "IndicSUPERB: A Speech Processing Universal
   Performance Benchmark for Indian Languages" (arXiv:2208.11761)
 - **Description**: Human-labeled ASR dataset, 1,684 hours of labelled speech
   across 12 Indian languages, collected from 1,218 contributors across 203
-  districts in India. Split into "known" and "hard" test sets per language.
-- **Languages used in this project**: Hindi, Bengali, Telugu, Odia
-- **License**: Packaging released as CC0 by AI4Bharat (HF page); the
-  government AIKosh/Bhashini mirror lists CC BY-SA 4.0 for individual
-  language subsets — confirm the specific license tag shown on the HF
-  dataset card for the config you download before redistributing anything.
-- **Access note**: gated on Hugging Face — requires agreeing to share
-  contact info before download (`huggingface-cli login` + accept dataset
-  terms on the dataset page).
-- **Samples/duration used**: TBD (Phase 2 run) — target 500–2,000 clips per
-  language from the "test known" split for evaluation, small train subset
-  from "train" split for Phase 8 LoRA fine-tuning.
-- **Why suitable**: only human-labeled, multi-district Indian-language ASR
-  benchmark of this scale that is freely downloadable and includes Odia
-  natively, with a documented "hard" split that's useful for error analysis.
+  districts in India.
+- **Current schema** (verified from the dataset card's `dataset_info`,
+  per language config, e.g. `bengali`):
+  - `fname` (string)
+  - `text` (string) — transcript
+  - `audio_filepath` (Audio feature — **not** `audio`)
+  - `lang` (string)
+  - `duration` (float64)
+  - `gender` (string)
+  - `speaker_id` (int64)
+- **Current splits**: only `train` and `valid`. There is **no** `test_known`
+  or `test_unknown` split in this repo — that split naming belongs to the
+  old lowercase repo. This project uses `valid` for evaluation and `train`
+  for the Phase 8 fine-tuning subset.
+- **Languages used in this project**: `hindi`, `bengali`, `telugu`, `odia`
+  (config names, lowercase, matching AI4Bharat's 12 supported languages)
+- **License**: **CC BY 4.0**, as stated directly in the current dataset
+  card's YAML metadata (`license: cc-by-4.0`). This corrects the earlier
+  version of this file, which cited CC0/CC BY-SA based on the older repo
+  and a government mirror — neither applies to the repo actually used here.
+- **Access note**: still appears gated on Hugging Face for some
+  configs — run `huggingface-cli login` and accept any dataset terms shown
+  on the page before downloading; confirm at run time in Phase 2 execution
+  whether a given language config actually requires gating (this can
+  change independent of the schema).
+- **Samples/duration used**: TBD (Phase 2 run) — target up to 500–2,000
+  clips per language from `valid` for evaluation; a small subset of
+  `train` for Phase 8 LoRA fine-tuning.
+- **Why suitable**: still the only human-labeled, multi-district
+  Indian-language ASR benchmark of this scale that is freely downloadable
+  and includes Odia natively.
 
 ## 2. Google FLEURS (secondary/independent evaluation set)
 
@@ -50,35 +72,29 @@ not estimated in advance.
   baseline's WER is dataset-specific or a general language-level pattern —
   directly answers "why does performance differ between languages."
 
-## 3. Mozilla Common Voice (noise-robustness experiment source)
+## 3. Noise source for SNR experiments (Phase 6) — TBD
 
-- **Source**: https://commonvoice.mozilla.org/en/datasets ,
-  mirrored at https://huggingface.co/datasets/mozilla-foundation/common_voice_17_0
-- **Description**: Crowdsourced, CC0-licensed multilingual speech corpus.
-  Hindi, Bengali, Telugu and Odia are all present as configs in current
-  releases.
-- **License**: CC0
-- **Samples/duration used**: TBD (Phase 2 run) — small clean subset per
-  language, used as the source audio for the controlled-noise experiment
-  (Phase 6), since its crowdsourced recording conditions are closer to
-  "clean but not studio-perfect" than Kathbath/FLEURS.
-- **Why suitable**: gives a second, differently-collected data source and
-  is the most permissively licensed of the three (CC0), useful for any
-  audio we may want to lightly transform/redistribute in demo form.
-
-## 4. Noise source for SNR experiments (Phase 6) — TBD
-
-Not yet selected. Candidates to verify in Phase 2: MUSAN (freely licensed
-noise/music/speech corpus) or ESC-50 (environmental sound classification,
-CC-BY). Will confirm actual availability/license before use rather than
-assume — no noise audio will be used without a verified real source and
-license.
+Not yet selected. Candidates to verify before Phase 6: MUSAN (freely
+licensed noise/music/speech corpus) or ESC-50 (environmental sound
+classification, CC-BY). Clean speech for this experiment will come from
+Kathbath `valid` (the same evaluation set used for the baseline), with
+synthetic noise mixed in at controlled SNR — not from Common Voice (see
+below). Will confirm actual noise-dataset availability/license before use
+rather than assume.
 
 ## Explicitly not used (with reason)
 
+- **Mozilla Common Voice**: removed from the pipeline. Mozilla moved
+  Common Voice distribution to the Mozilla Data Collective in October
+  2025, and the `mozilla-foundation/common_voice_17_0` Hugging Face
+  repository referenced in an earlier version of this plan is no longer a
+  usable/current data source. If a Common-Voice-equivalent is needed later
+  (e.g. for extra acoustic variety), it will be re-sourced from whatever
+  Mozilla's current official distribution channel is at that time, verified
+  first — not assumed to still be on that old HF repo.
 - **MUCS**: requires separate per-dataset registration; not pulled in
-  unless the code-switching experiment specifically needs it and the above
-  three sources prove insufficient.
+  unless the code-switching experiment specifically needs it and Kathbath
+  proves insufficient.
 - **GramVaani**: call-center audio, more licensing friction; same
   treatment as MUCS.
 - **IndicWhisper / Vistaar benchmark numbers**: used only as external
