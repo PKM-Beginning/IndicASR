@@ -16,7 +16,7 @@ data:
   datasets:
     - name: kathbath
       hf_path: ai4bharat/Kathbath
-      split: test_known
+      split: valid
     - name: fleurs
       hf_path: google/fleurs
       split: test
