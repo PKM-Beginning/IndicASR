@@ -109,7 +109,6 @@ def _iter_common_voice(language: str, split: str, max_samples: int, cv_version: 
         language,
         split=split,
         streaming=True,
-        trust_remote_code=True,
     )
 
     for i, row in enumerate(ds):
