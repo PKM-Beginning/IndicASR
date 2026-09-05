@@ -63,7 +63,6 @@ def _iter_kathbath(language: str, split: str, max_samples: int) -> Iterator[Samp
         hf_lang,
         split=split,
         streaming=True,
-        trust_remote_code=True,
     )
 
     for i, row in enumerate(ds):
