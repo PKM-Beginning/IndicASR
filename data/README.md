@@ -16,7 +16,7 @@ data/
 To populate this directory for the first time:
 
 ```bash
-huggingface-cli login          # once, needed for Kathbath + Common Voice (gated)
+hf auth login       # once, needed for Kathbath + Common Voice (gated)
 # then accept dataset terms in a browser at:
 #   https://huggingface.co/datasets/ai4bharat/Kathbath
 #   https://huggingface.co/datasets/mozilla-foundation/common_voice_17_0
