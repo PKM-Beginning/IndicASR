@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+data/raw/
+data/processed/
+*.wav
+*.mp3
+*.flac
+.env
+.cache/
+*.ckpt
+*.pt
+*.bin
+results/plots/*.png
+wandb/
+mlruns/
+.DS_Store
