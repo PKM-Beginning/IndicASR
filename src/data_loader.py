@@ -1,15 +1,6 @@
 """
 data_loader.py — IndicASR
 
-Loads evaluation/training subsets from
-DATASETS.md (Kathbath and FLEURS) and returns them in a common
-format containing audio data, sampling rate, transcript, language,
-dataset name, and sample ID.
-
-This module performs network calls through the `datasets` library.
-Run `python src/data_loader.py --smoke_test` first on a tiny sample
-to confirm dataset access and audio decoding before scaling up.
-=======
 Loads evaluation/training subsets from Kathbath and FLEURS (see
 DATASETS.md) and returns them in a common format: a list of Sample objects
 carrying the decoded audio array + sampling rate + transcript directly —
@@ -23,15 +14,9 @@ first on a tiny sample to confirm access/schema assumptions hold before
 scaling up. If the actual schema differs from what's documented here
 (schemas do change), the smoke test will surface a KeyError immediately —
 report that back rather than silently patching around it.
->>>>>>> theirs
 
-Concept notes:
+Concept notes (since you're new to some of this):
 - "streaming=True" in HF `datasets` lets you pull examples one at a time
-<<<<<<< ours
-  instead of downloading the whole dataset up front.
-- Kathbath is gated: accept the dataset terms on Hugging Face and
-  authenticate your Hugging Face account before running the loader.
-=======
   instead of downloading the whole dataset up front — important for
   Kathbath, which is large in total even though we only want a few
   thousand clips.
@@ -40,7 +25,6 @@ Concept notes:
   `{"array": np.ndarray, "sampling_rate": int, "path": str|None}` — the
   `path` key is often None in streaming mode, which is why this loader
   keeps the decoded array itself rather than assuming a file path.
->>>>>>> theirs
 """
 
 import argparse
@@ -57,12 +41,7 @@ class Sample:
     dataset_name: str
     language: str
     transcript: str
-<<<<<<< ours
-    audio_array: object = None
-    audio_path: str = None
-=======
     audio_array: Optional[np.ndarray] = None
->>>>>>> theirs
     sampling_rate: int = 16000
     duration: Optional[float] = None
 
@@ -125,74 +104,19 @@ def _iter_fleurs(language: str, lang_config: str, split: str, max_samples: int) 
     """Streams FLEURS for one language config (e.g. 'hi_in')."""
     from datasets import load_dataset
 
-    ds = load_dataset(
-        "google/fleurs",
-        lang_config,
-        split=split,
-        streaming=True,
-    )
+    ds = load_dataset("google/fleurs", lang_config, split=split, streaming=True)
 
     for i, row in enumerate(ds):
         if i >= max_samples:
             break
-<<<<<<< ours
-
         audio = row["audio"]
-
-        try:
-            # Current Hugging Face datasets / torchcodec format
-            audio_data = audio.get_all_samples()
-            audio_array = audio_data.data
-            sampling_rate = int(audio_data.sample_rate)
-
-        except AttributeError:
-            # Compatibility with older dictionary-style audio format
-            audio_array = audio["array"]
-            sampling_rate = int(audio.get("sampling_rate", 16000))
-
-=======
-        audio = row["audio"]
->>>>>>> theirs
         yield Sample(
             sample_id=f"fleurs_{lang_config}_{i}",
             dataset_name="fleurs",
             language=language,
             transcript=row["transcription"],
-<<<<<<< ours
-            audio_array=audio_array,
-            audio_path=None,
-            sampling_rate=sampling_rate,
-        )
-
-
-def _iter_common_voice(language: str, split: str, max_samples: int, cv_version: str = "17_0") -> Iterator[Sample]:
-    """
-    Streams a Common Voice release for one language.
-    Requires: `huggingface-cli login` + accepting CV terms once.
-    """
-    from datasets import load_dataset
-
-    ds = load_dataset(
-        f"mozilla-foundation/common_voice_{cv_version}",
-        language,
-        split=split,
-        streaming=True,
-    )
-
-    for i, row in enumerate(ds):
-        if i >= max_samples:
-            break
-        yield Sample(
-            sample_id=f"cv{cv_version}_{language}_{i}",
-            dataset_name="common_voice",
-            language=language,
-            transcript=row["sentence"],
-            audio_path=row["audio"]["path"] if "audio" in row else None,
-            sampling_rate=row["audio"].get("sampling_rate", 16000) if "audio" in row else 16000,
-=======
             audio_array=audio["array"],
             sampling_rate=audio["sampling_rate"],
->>>>>>> theirs
         )
 
 
