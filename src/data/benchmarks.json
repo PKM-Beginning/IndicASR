@@ -1,0 +1,26 @@
+{
+  "note": "Populate this file with real numbers from the repo's evaluation scripts (Kathbath / FLEURS), or serve the same shape from GET /benchmarks. Leave a metric as null until it has been measured — the UI renders null as 'pending evaluation'.",
+  "updated_at": null,
+  "datasets": ["AI4Bharat Kathbath", "Google FLEURS"],
+  "languages": ["hi", "bn", "te", "or"],
+  "models": [
+    {
+      "id": "indicconformer",
+      "name": "IndicConformer 600M",
+      "metrics": {
+        "wer": null,
+        "cer": null,
+        "rtf": null
+      }
+    },
+    {
+      "id": "whisper-small",
+      "name": "Whisper-small",
+      "metrics": {
+        "wer": null,
+        "cer": null,
+        "rtf": null
+      }
+    }
+  ]
+}

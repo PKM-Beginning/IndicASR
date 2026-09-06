@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@keyframes pulseBar {
+  0%,
+  100% {
+    transform: scaleY(0.35);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-ink text-ivory font-body antialiased;
+    background-image: radial-gradient(circle at 18% -10%, rgba(124, 108, 240, 0.16), transparent 42%),
+      radial-gradient(circle at 82% 8%, rgba(69, 230, 214, 0.08), transparent 38%);
+    background-attachment: fixed;
+  }
+
+  ::selection {
+    background: rgba(124, 108, 240, 0.35);
+    color: #fff;
+  }
+
+  :focus-visible {
+    outline: 2px solid theme('colors.wave.DEFAULT');
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .section {
+    @apply mx-auto w-full max-w-6xl px-6 py-24 sm:px-8;
+  }
+
+  .section-heading {
+    @apply font-display text-3xl font-medium tracking-tight text-ivory sm:text-4xl;
+  }
+
+  .section-sub {
+    @apply mt-3 max-w-prose text-[15px] leading-relaxed text-mute;
+  }
+
+  .panel {
+    @apply rounded-2xl border border-hairline bg-panel;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-ivory px-6 py-3 font-body text-sm font-medium text-ink transition-transform duration-200 hover:-translate-y-0.5 active:translate-y-0;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full border border-hairline bg-transparent px-6 py-3 font-body text-sm font-medium text-ivory transition-colors duration-200 hover:border-signal-soft hover:text-signal-soft;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
