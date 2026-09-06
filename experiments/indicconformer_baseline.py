@@ -9,7 +9,8 @@ Features:
 - Uses official IndicConformer CTC inference API.
 - Calculates WER, CER and RTF.
 - Saves every prediction immediately.
-- Supports resume after Colab disconnects/interruption.
+- Supports safe resume after interruption/disconnection.
+- Rebuilds the final summary from ALL saved predictions.
 - Keeps Whisper baseline completely separate.
 
 IMPORTANT:
@@ -21,12 +22,16 @@ import csv
 import os
 import sys
 import time
+from collections import defaultdict
 
 import torch
 from jiwer import wer, cer
 
 
+# -------------------------------------------------------------------
 # Allow imports from src/
+# -------------------------------------------------------------------
+
 sys.path.insert(
     0,
     os.path.join(os.path.dirname(__file__), "..", "src")
@@ -62,26 +67,45 @@ class IndicConformerASR:
 
         from transformers import AutoModel
 
-        self.model_name = model_name
-
+        # Report requested/available device.
         if device == "cuda" and torch.cuda.is_available():
             self.device = "cuda"
         else:
             self.device = "cpu"
 
-        print(f"[indicconformer] Device: {self.device}")
+        print(
+            f"[indicconformer] PyTorch CUDA available: "
+            f"{torch.cuda.is_available()}"
+        )
+
+        if torch.cuda.is_available():
+            print(
+                f"[indicconformer] GPU: "
+                f"{torch.cuda.get_device_name(0)}"
+            )
+
+        print(
+            f"[indicconformer] Requested device: {device}"
+        )
 
         print(
             f"[indicconformer] Loading model: "
-            f"{self.model_name}"
+            f"{model_name}"
         )
 
+        self.model_name = model_name
+
+        # IMPORTANT:
+        # IndicConformer uses custom remote code and its own
+        # ONNX execution provider/device handling.
         self.model = AutoModel.from_pretrained(
-            self.model_name,
+            model_name,
             trust_remote_code=True,
         )
 
-        print("[indicconformer] Model loaded successfully.")
+        print(
+            "[indicconformer] Model loaded successfully."
+        )
 
 
     def transcribe(
@@ -91,9 +115,14 @@ class IndicConformerASR:
         language,
     ):
 
+        if language not in LANGUAGE_CODES:
+            raise ValueError(
+                f"Unsupported language: {language}"
+            )
+
         if sampling_rate != 16000:
             raise ValueError(
-                f"IndicConformer expects 16kHz audio, "
+                "IndicConformer expects 16kHz audio, "
                 f"got {sampling_rate}Hz"
             )
 
@@ -105,7 +134,9 @@ class IndicConformerASR:
             dtype=torch.float32,
         ).unsqueeze(0)
 
-        audio_duration = len(audio_array) / sampling_rate
+        audio_duration = (
+            len(audio_array) / sampling_rate
+        )
 
         start = time.perf_counter()
 
@@ -117,9 +148,11 @@ class IndicConformerASR:
                 "ctc",
             )
 
-        elapsed = time.perf_counter() - start
+        elapsed = (
+            time.perf_counter() - start
+        )
 
-        # Model normally returns decoded text.
+        # Official model normally returns decoded text.
         if isinstance(prediction, str):
             text = prediction
         else:
@@ -183,7 +216,7 @@ def get_samples(
 
 
 # -------------------------------------------------------------------
-# Resume-safe CSV
+# Resume support
 # -------------------------------------------------------------------
 
 def load_completed_ids(path):
@@ -213,6 +246,182 @@ def load_completed_ids(path):
 
 
 # -------------------------------------------------------------------
+# Rebuild summary from cumulative predictions CSV
+# -------------------------------------------------------------------
+
+def rebuild_summary(
+    predictions_path,
+    summary_path,
+):
+
+    if not os.path.exists(predictions_path):
+        print(
+            "[indicconformer] "
+            "No predictions file found. "
+            "Summary not generated."
+        )
+        return
+
+    groups = defaultdict(
+        lambda: {
+            "references": [],
+            "predictions": [],
+            "durations": [],
+            "inference_times": [],
+            "rtfs": [],
+        }
+    )
+
+    with open(
+        predictions_path,
+        "r",
+        encoding="utf-8",
+        newline="",
+    ) as f:
+
+        reader = csv.DictReader(f)
+
+        for row in reader:
+
+            dataset = row["dataset"]
+            language = row["language"]
+
+            key = (
+                dataset,
+                language,
+            )
+
+            groups[key]["references"].append(
+                row["reference_normalized"]
+            )
+
+            groups[key]["predictions"].append(
+                row["prediction_normalized"]
+            )
+
+            groups[key]["durations"].append(
+                float(row["audio_duration_s"])
+            )
+
+            groups[key]["inference_times"].append(
+                float(row["inference_s"])
+            )
+
+            groups[key]["rtfs"].append(
+                float(row["real_time_factor"])
+            )
+
+    fieldnames = [
+        "dataset",
+        "language",
+        "n_samples",
+        "wer",
+        "cer",
+        "avg_audio_duration_s",
+        "avg_inference_s",
+        "avg_rtf",
+    ]
+
+    with open(
+        summary_path,
+        "w",
+        newline="",
+        encoding="utf-8",
+    ) as f:
+
+        writer = csv.DictWriter(
+            f,
+            fieldnames=fieldnames,
+        )
+
+        writer.writeheader()
+
+        for (
+            dataset,
+            language,
+        ), data in sorted(groups.items()):
+
+            references = data["references"]
+            predictions = data["predictions"]
+
+            if not references:
+                continue
+
+            group_wer = wer(
+                references,
+                predictions,
+            )
+
+            group_cer = cer(
+                references,
+                predictions,
+            )
+
+            durations = data["durations"]
+            inference_times = data[
+                "inference_times"
+            ]
+            rtfs = data["rtfs"]
+
+            avg_duration = (
+                sum(durations)
+                / len(durations)
+            )
+
+            avg_inference = (
+                sum(inference_times)
+                / len(inference_times)
+            )
+
+            avg_rtf = (
+                sum(rtfs)
+                / len(rtfs)
+            )
+
+            writer.writerow({
+
+                "dataset":
+                    dataset,
+
+                "language":
+                    language,
+
+                "n_samples":
+                    len(references),
+
+                "wer":
+                    f"{group_wer:.4f}",
+
+                "cer":
+                    f"{group_cer:.4f}",
+
+                "avg_audio_duration_s":
+                    f"{avg_duration:.3f}",
+
+                "avg_inference_s":
+                    f"{avg_inference:.3f}",
+
+                "avg_rtf":
+                    f"{avg_rtf:.3f}",
+            })
+
+            print(
+                f"[summary] "
+                f"{dataset}/{language}: "
+                f"n={len(references)} | "
+                f"WER={group_wer:.4f} | "
+                f"CER={group_cer:.4f} | "
+                f"RTF={avg_rtf:.3f}"
+            )
+
+    print()
+    print(
+        "[indicconformer] "
+        "Cumulative summary rebuilt successfully."
+    )
+
+
+# -------------------------------------------------------------------
 # Main
 # -------------------------------------------------------------------
 
@@ -233,14 +442,17 @@ def main():
 
     parser.add_argument(
         "--model",
-        default="ai4bharat/indic-conformer-600m-multilingual",
+        default=(
+            "ai4bharat/"
+            "indic-conformer-600m-multilingual"
+        ),
     )
 
     args = parser.parse_args()
 
-    # ---------------------------------------------------------------
+    # ----------------------------------------------------------------
     # Load configuration
-    # ---------------------------------------------------------------
+    # ----------------------------------------------------------------
 
     config = load_config(args.config)
 
@@ -254,15 +466,19 @@ def main():
             "5 samples per dataset/language."
         )
 
-    max_samples = config["data"]["max_eval_samples"]
+    max_samples = (
+        config["data"]["max_eval_samples"]
+    )
 
     languages = config["data"]["languages"]
 
-    # ---------------------------------------------------------------
-    # Output
-    # ---------------------------------------------------------------
+    # ----------------------------------------------------------------
+    # Output paths
+    # ----------------------------------------------------------------
 
-    output_dir = "results/indicconformer"
+    output_dir = (
+        "results/indicconformer"
+    )
 
     os.makedirs(
         output_dir,
@@ -279,9 +495,9 @@ def main():
         "indicconformer_summary.csv",
     )
 
-    # ---------------------------------------------------------------
+    # ----------------------------------------------------------------
     # Resume support
-    # ---------------------------------------------------------------
+    # ----------------------------------------------------------------
 
     completed_ids = load_completed_ids(
         predictions_path
@@ -297,22 +513,21 @@ def main():
 
         print(
             "[indicconformer] "
-            "Already completed samples "
-            "will be skipped."
+            "Completed samples will be skipped."
         )
 
-    # ---------------------------------------------------------------
-    # Model
-    # ---------------------------------------------------------------
+    # ----------------------------------------------------------------
+    # Load model
+    # ----------------------------------------------------------------
 
     asr = IndicConformerASR(
         model_name=args.model,
         device=config["model"]["device"],
     )
 
-    # ---------------------------------------------------------------
+    # ----------------------------------------------------------------
     # CSV setup
-    # ---------------------------------------------------------------
+    # ----------------------------------------------------------------
 
     file_exists = os.path.exists(
         predictions_path
@@ -333,11 +548,9 @@ def main():
         "cer",
     ]
 
-    all_metrics = []
-
-    # ---------------------------------------------------------------
-    # Open in append mode
-    # ---------------------------------------------------------------
+    # ----------------------------------------------------------------
+    # Open predictions file in append mode
+    # ----------------------------------------------------------------
 
     with open(
         predictions_path,
@@ -352,32 +565,31 @@ def main():
         )
 
         if not file_exists:
+
             writer.writeheader()
             f.flush()
 
-        # -----------------------------------------------------------
+        # ------------------------------------------------------------
         # Dataset loop
-        # -----------------------------------------------------------
+        # ------------------------------------------------------------
 
-        for dataset_config in config["data"]["datasets"]:
+        for dataset_config in (
+            config["data"]["datasets"]
+        ):
 
-            dataset_name = dataset_config["name"]
+            dataset_name = (
+                dataset_config["name"]
+            )
 
             for language in languages:
 
                 print()
-                print(
-                    "=" * 60
-                )
-
+                print("=" * 60)
                 print(
                     f"[indicconformer] "
                     f"{dataset_name}/{language}"
                 )
-
-                print(
-                    "=" * 60
-                )
+                print("=" * 60)
 
                 samples = get_samples(
                     dataset_name,
@@ -386,42 +598,51 @@ def main():
                     max_samples,
                 )
 
-                references = []
-                predictions = []
-
-                durations = []
-                inference_times = []
-                rtfs = []
-
                 processed = 0
 
-                # ---------------------------------------------------
+                # ----------------------------------------------------
                 # Process samples
-                # ---------------------------------------------------
+                # ----------------------------------------------------
 
                 for sample in samples:
 
-                    if sample.sample_id in completed_ids:
+                    sample_id = sample.sample_id
+
+                    if sample_id in completed_ids:
 
                         print(
                             f"[indicconformer] "
                             f"Skipping completed: "
-                            f"{sample.sample_id}"
+                            f"{sample_id}"
                         )
 
                         continue
 
+                    # ------------------------------------------------
+                    # Inference
+                    # ------------------------------------------------
+
                     result = asr.transcribe(
-                        audio_array=sample.audio_array,
-                        sampling_rate=sample.sampling_rate,
+                        audio_array=(
+                            sample.audio_array
+                        ),
+                        sampling_rate=(
+                            sample.sampling_rate
+                        ),
                         language=language,
                     )
 
-                    reference_raw = sample.transcript
+                    reference_raw = (
+                        sample.transcript
+                    )
 
-                    prediction_raw = result[
-                        "prediction"
-                    ]
+                    prediction_raw = (
+                        result["prediction"]
+                    )
+
+                    # ------------------------------------------------
+                    # Normalization
+                    # ------------------------------------------------
 
                     reference_normalized = (
                         normalize_text(
@@ -435,6 +656,10 @@ def main():
                         )
                     )
 
+                    # ------------------------------------------------
+                    # Metrics
+                    # ------------------------------------------------
+
                     sample_wer = wer(
                         reference_normalized,
                         prediction_normalized,
@@ -445,38 +670,14 @@ def main():
                         prediction_normalized,
                     )
 
-                    references.append(
-                        reference_normalized
-                    )
-
-                    predictions.append(
-                        prediction_normalized
-                    )
-
-                    durations.append(
-                        result[
-                            "audio_duration_seconds"
-                        ]
-                    )
-
-                    inference_times.append(
-                        result[
-                            "inference_seconds"
-                        ]
-                    )
-
-                    rtfs.append(
-                        result["rtf"]
-                    )
-
                     # ------------------------------------------------
-                    # SAVE IMMEDIATELY
+                    # Save immediately
                     # ------------------------------------------------
 
                     writer.writerow({
 
                         "sample_id":
-                            sample.sample_id,
+                            sample_id,
 
                         "dataset":
                             dataset_name,
@@ -497,13 +698,19 @@ def main():
                             prediction_normalized,
 
                         "audio_duration_s":
-                            f"{result['audio_duration_seconds']:.3f}",
+                            (
+                                f"{result['audio_duration_seconds']:.3f}"
+                            ),
 
                         "inference_s":
-                            f"{result['inference_seconds']:.3f}",
+                            (
+                                f"{result['inference_seconds']:.3f}"
+                            ),
 
                         "real_time_factor":
-                            f"{result['rtf']:.3f}",
+                            (
+                                f"{result['rtf']:.3f}"
+                            ),
 
                         "wer":
                             f"{sample_wer:.4f}",
@@ -512,11 +719,11 @@ def main():
                             f"{sample_cer:.4f}",
                     })
 
+                    # Force data to disk immediately.
                     f.flush()
 
-                    completed_ids.add(
-                        sample.sample_id
-                    )
+                    # Mark as completed only AFTER successful save.
+                    completed_ids.add(sample_id)
 
                     processed += 1
 
@@ -527,146 +734,26 @@ def main():
                         f"RTF={result['rtf']:.3f}"
                     )
 
-                # ---------------------------------------------------
-                # Dataset/language summary
-                # ---------------------------------------------------
+                print(
+                    f"[indicconformer] "
+                    f"New samples processed: "
+                    f"{processed}"
+                )
 
-                if references:
+    # ----------------------------------------------------------------
+    # IMPORTANT:
+    # Rebuild summary from ALL cumulative predictions.
+    # ----------------------------------------------------------------
 
-                    language_wer = wer(
-                        references,
-                        predictions,
-                    )
-
-                    language_cer = cer(
-                        references,
-                        predictions,
-                    )
-
-                    avg_duration = (
-                        sum(durations)
-                        / len(durations)
-                    )
-
-                    avg_inference = (
-                        sum(inference_times)
-                        / len(inference_times)
-                    )
-
-                    avg_rtf = (
-                        sum(rtfs)
-                        / len(rtfs)
-                    )
-
-                    metrics = {
-
-                        "dataset":
-                            dataset_name,
-
-                        "language":
-                            language,
-
-                        "n_samples":
-                            len(references),
-
-                        "wer":
-                            language_wer,
-
-                        "cer":
-                            language_cer,
-
-                        "avg_audio_duration_s":
-                            avg_duration,
-
-                        "avg_inference_s":
-                            avg_inference,
-
-                        "avg_rtf":
-                            avg_rtf,
-                    }
-
-                    all_metrics.append(
-                        metrics
-                    )
-
-                    print()
-
-                    print(
-                        f"[indicconformer] "
-                        f"{dataset_name}/{language}: "
-                        f"WER={language_wer:.4f} "
-                        f"CER={language_cer:.4f} "
-                        f"(n={len(references)}, "
-                        f"avg_rtf={avg_rtf:.3f})"
-                    )
-
-                else:
-
-                    print(
-                        f"[indicconformer] "
-                        f"No new samples processed "
-                        f"for {dataset_name}/{language}."
-                    )
-
-    # ---------------------------------------------------------------
-    # Summary CSV
-    # ---------------------------------------------------------------
-
-    with open(
+    rebuild_summary(
+        predictions_path,
         summary_path,
-        "w",
-        newline="",
-        encoding="utf-8",
-    ) as f:
-
-        writer = csv.DictWriter(
-            f,
-            fieldnames=[
-                "dataset",
-                "language",
-                "n_samples",
-                "wer",
-                "cer",
-                "avg_audio_duration_s",
-                "avg_inference_s",
-                "avg_rtf",
-            ],
-        )
-
-        writer.writeheader()
-
-        for metrics in all_metrics:
-
-            writer.writerow({
-
-                "dataset":
-                    metrics["dataset"],
-
-                "language":
-                    metrics["language"],
-
-                "n_samples":
-                    metrics["n_samples"],
-
-                "wer":
-                    f"{metrics['wer']:.4f}",
-
-                "cer":
-                    f"{metrics['cer']:.4f}",
-
-                "avg_audio_duration_s":
-                    f"{metrics['avg_audio_duration_s']:.3f}",
-
-                "avg_inference_s":
-                    f"{metrics['avg_inference_s']:.3f}",
-
-                "avg_rtf":
-                    f"{metrics['avg_rtf']:.3f}",
-            })
+    )
 
     print()
     print(
-        "[indicconformer] Benchmark finished."
+        "[indicconformer] "
+        "Benchmark run finished."
     )
 
     print(
