@@ -1,0 +1,43 @@
+# Baseline evaluation config — Phase 3/4
+# Edit these values to scale the experiment up or down; every script in
+# src/ and experiments/ reads its settings from a config file like this one,
+# nothing is hardcoded.
+
+experiment_name: baseline_whisper_small
+
+model:
+  name: openai/whisper-small
+  # step up to openai/whisper-medium once the small baseline runs cleanly
+  # end-to-end on the T4 — start small to validate the pipeline first.
+  device: cuda   # falls back to cpu automatically if no GPU is available
+  language_mode: per_language   # pass the correct forced language token per clip
+
+data:
+  languages: [hindi, bengali, telugu, odia]   # Kathbath config names
+  datasets:
+    - name: kathbath
+      hf_path: ai4bharat/Kathbath
+      eval_split: valid
+      train_split: train
+    - name: fleurs
+      hf_path: google/fleurs
+      split: test
+      lang_config_map:
+        hindi: hi_in
+        bengali: bn_in
+        telugu: te_in
+        odia: or_in
+
+  max_eval_samples: 500      # per language, per dataset — raise once the
+                              # small run is verified to work end-to-end
+  max_train_samples: 200     # used later in finetune.yaml, kept here for reference
+  sample_rate: 16000
+
+evaluation:
+  metrics: [wer, cer]
+  text_normalization: whisper_basic   # normalize before scoring (case, punctuation)
+  save_predictions: true
+  predictions_path: results/metrics/baseline_predictions.csv
+
+reproducibility:
+  seed: 42

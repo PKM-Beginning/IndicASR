@@ -1,6 +1,38 @@
-node_modules
-dist
+# Node / React frontend
+node_modules/
+dist/
 .env
 .env.local
+
+# Python
+__pycache__/
+*.pyc
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Dataset / generated audio
+data/raw/
+data/processed/
+*.wav
+*.mp3
+*.flac
+
+# Environment / cache
+.cache/
+
+# ML model files
+*.ckpt
+*.pt
+*.bin
+
+# Results
+results/plots/*.png
+
+# Experiment tracking
+wandb/
+mlruns/
+
+# OS / logs
 .DS_Store
 *.log
